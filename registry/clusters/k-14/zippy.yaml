@@ -12,14 +12,14 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: 555935582951.dkr.ecr.us-west-2.amazonaws.com/charts
-    chart: rr737-zippy
+    repoURL: 555935582951.dkr.ecr.us-west-2.amazonaws.com/rr737/zippy/charts
+    chart: rr737/zippy
     targetRevision: 0.1.0-rc.9191e86
     helm:
       valuesObject:
         rr737-zippy:
           image:
-            repository: 555935582951.dkr.ecr.us-west-2.amazonaws.com/rr737-zippy
+            repository: 555935582951.dkr.ecr.us-west-2.amazonaws.com/rr737/zippy
           ingress:
             className: nginx
             enabled: true
