@@ -1,0 +1,37 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  name: external-dns-k-14
+  namespace: "argocd"
+spec:
+  destination:
+    name: k-14
+    namespace: external-dns
+  project: default
+  source:
+    chart: external-dns
+    helm:
+      releaseName: external-dns
+      values: |
+        serviceAccount:
+          create: true
+          name: external-dns
+          annotations:
+            eks.amazonaws.com/role-arn: arn:aws:iam::555935582951:role/k1-external-dns-k-14
+        provider: aws
+        sources:
+        - ingress
+        domainFilters:
+        - paas.kubefirst.io
+    repoURL: https://kubernetes-sigs.github.io/external-dns
+    targetRevision: 1.14.4
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

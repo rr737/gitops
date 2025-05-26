@@ -1,0 +1,98 @@
+# This workflow adds a new ArgoCD application inside the cluster registry for 
+# the new app repository.
+# TODO
+#  - xxx the ecr repo name from user input ( app_name)
+name: Add new application
+
+env:
+  AWS_REGION: "us-west-2"
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_name:
+        description: 'Application repository name'
+        required: true
+        default: 'zippy2'
+      cluster_name:
+        description: 'Cluster name'
+        default: 'show-me-the-minutes'
+        required: true
+      role_arn:
+        description: 'Role ARN'
+        required: true
+
+jobs:
+  create-argo-app:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: write
+    env:
+      CLUSTER_NAME : ${{inputs.cluster_name}}
+      APP_NAME : ${{inputs.app_name}}
+      ASSUME_ROLE_ARN: ${{inputs.role_arn}}
+    steps:
+      - name: configure aws credentials
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502
+        with:
+          role-to-assume: ${{env.ASSUME_ROLE_ARN}}
+          aws-region: ${{"env.AWS_REGION"}}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      # TODO: download zip in path different than PWD
+      - name: get-aws-cli
+        run: |
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip -q awscliv2.zip
+          sudo ./aws/install --update
+          aws --version
+
+      - name: create argo app
+        env:
+          ECR_IMAGE_REPO_URL: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          APP=$(echo -n $APP_NAME | cut -f 2 -d /)
+          OWNER=$(echo -n $APP_NAME | cut -f 1 -d /)
+
+          SHORT_SHA=$(aws ecr describe-images \
+            --repository-name "$OWNER/$APP" \
+            --query 'sort_by(imageDetails,& imagePushedAt)[-1].imageTags[0]' \
+            --output text)
+
+          CHART_VERSION=$(aws ecr describe-images \
+            --repository-name "$OWNER/charts/$APP" \
+            --query 'sort_by(imageDetails,& imagePushedAt)[-1].imageTags[0]' \
+            --output text)
+
+          cp ./templates/argo-app.yaml ./registry/clusters/${CLUSTER_NAME}/${APP}.yaml
+
+          ESCAPED_CHART_REGISTRY_URL=$(echo $ECR_IMAGE_REPO_URL/charts/$APP_NAME | sed 's/\//\\\//g')
+          ESCAPED_IMAGE_REGISTRY_URL=$(echo $ECR_IMAGE_REPO_URL | sed 's/\//\\\//g')
+
+          sed -i "s#{clusterName}#$CLUSTER_NAME#g" ./registry/clusters/${CLUSTER_NAME}/${APP}.yaml
+          sed -i "s#{appName}#$OWNER-$APP#g" ./registry/clusters/${CLUSTER_NAME}/${APP}.yaml
+          sed -i "s#{chartRepoURL}#$ESCAPED_CHART_REGISTRY_URL#g" ./registry/clusters/${CLUSTER_NAME}/${APP}.yaml
+          sed -i "s#{imageRepoURL}#$ESCAPED_IMAGE_REGISTRY_URL#g" ./registry/clusters/${CLUSTER_NAME}/${APP}.yaml
+          sed -i "s#{targetRevision}#$CHART_VERSION#g" ./registry/clusters/${CLUSTER_NAME}/${APP}.yaml
+          sed -i "s#{short_sha}#$SHORT_SHA#g" ./registry/clusters/${CLUSTER_NAME}/${APP}.yaml
+          cat ./registry/clusters/${CLUSTER_NAME}/${APP}.yaml
+      
+      - name: cleanup AWS CLI 
+        run: |
+          rm -rf awscliv2.zip
+          rm -rf aws
+
+      - name: Commit changes
+        run: |
+          git config user.name "kubefirst-demo-bot"
+          git config user.email "general@konstruct.io"
+          git add --all
+          git commit -m "[skip-ci] add $APP_NAME in $CLUSTER_NAME" || echo "No changes to commit"
+          git push origin HEAD

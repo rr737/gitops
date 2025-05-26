@@ -1,0 +1,32 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  name: cert-manager-k-14
+  namespace: "argocd"
+spec:
+  destination:
+    name: k-14
+    namespace: cert-manager
+  project: default
+  source:
+    chart: cert-manager
+    helm:
+      values: |-
+        serviceAccount:
+          create: true
+          name: cert-manager
+          annotations:
+            eks.amazonaws.com/role-arn: arn:aws:iam::555935582951:role/k1-cert-manager-k-14
+        installCRDs: true
+    repoURL: https://charts.jetstack.io
+    targetRevision: v1.15.2
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

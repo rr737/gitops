@@ -1,0 +1,43 @@
+# This workflow deploys new chart to the cluster.
+name: Deploy chart to a cluster
+on:
+  workflow_dispatch:
+    inputs:
+      chart_version:
+        description: 'chart version'
+        required: true
+        default: ''
+      cluster_name:
+        description: 'cluster name to deliver to'
+        default: 'show-me-the-minutes'
+        required: true
+      
+jobs:
+  deploy:
+    name: "update-chart"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract and print just the repository name
+        id: extract-repo-name
+        run: echo "repo_name=${GITHUB_REPOSITORY#*/}" >> $GITHUB_OUTPUT
+
+      - name: checkout-gitops
+        uses: actions/checkout@v4
+        with:
+          repository: "${{ github.repository_owner }}/gitops"
+          ref: main
+          token: ${{ secrets.KBOT_TOKEN }}
+
+      - name: update-tag
+        env:
+          REPO_NAME: ${{ steps.extract-repo-name.outputs.repo_name }}
+        run: |
+          sed "s/targetRevision:.*/targetRevision: ${{inputs.chart_version}}/" -i registry/clusters/${{inputs.cluster_name}}/$REPO_NAME.yaml
+
+          git config --global user.email "konstruct-bot@konstruct.io"
+          git config --global user.name "konstruct-bot"
+
+          git add   registry/clusters/${{inputs.cluster_name}}/$REPO_NAME.yaml
+          git commit -m "[skip ci]: upgrade $REPO_NAME chart to ${{inputs.chart_version}} in ${{inputs.cluster_name}}"
+
+          git push origin main

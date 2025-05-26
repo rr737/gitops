@@ -1,0 +1,79 @@
+# This workflow generates a Helm chart and copies it with the tempaltes to the users's
+# application repository. 
+# TODO:
+#  - KBOT_TOKEN needs to be created before hand.
+name: Create downstream workflow
+
+env:
+  AWS_REGION: us-west-2
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_name:
+        description: 'Application repository name'
+        required: true
+      cluster_name:
+        description: 'Cluster name'
+        required: true
+      role_arn:
+        description: 'Role ARN'
+        required: true
+jobs:
+  copy-workflow-downstream:
+    runs-on: ubuntu-latest
+    env:
+      CLUSTER_NAME: ${{inputs.cluster_name}}
+      APP_NAME: ${{inputs.app_name}}
+      ASSUME_ROLE_ARN: ${{inputs.role_arn}}
+    steps:
+      - name: Checkout gitops repository
+        uses: actions/checkout@v4
+        with:
+          path: gitops
+
+      - name: Checkout app repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{inputs.app_name}}
+          path: app
+          token: ${{secrets.KBOT_TOKEN}}
+
+      - name: create chart and github workflows
+        run: |
+          cd ./app
+          DIR="./charts"
+
+          # Check if directory exists
+          if [ -d "$DIR" ]; then
+            echo "directory $DIR exists skipping helm chart creation"
+          else
+            echo "directory $DIR does not exist. Creating now..."
+            mkdir -p "$DIR/$APP_NAME"
+            cd "$DIR"
+            helm create $APP_NAME
+            cd ..
+          fi
+          
+          mkdir -p .github/workflows
+          cp ../gitops/templates/actions/publish.yaml .github/workflows/publish.yaml
+          cp ../gitops/templates/actions/deploy.yaml .github/workflows/deploy.yaml
+          echo replace cluster name and app name
+
+          sed "s#{appName}#$APP_NAME#g" -i .github/workflows/publish.yaml
+          
+          echo "replace region and roleARN in publish.yaml"
+          sed "s#{region}#$AWS_REGION#g" -i .github/workflows/publish.yaml
+          sed "s#{roleARN}#$ASSUME_ROLE_ARN#g" -i .github/workflows/publish.yaml
+
+      - name: Commit and push changes
+        env:
+          GITHUB_TOKEN: ${{secrets.KBOT_TOKEN}}
+          APP_NAME: ${{inputs.app_name}}
+        run: |
+          cd ./app
+          git config user.name "kubefirst-demo-bot"
+          git config user.email "general@konstruct.io"
+          git add --all
+          git commit -m "add ci content for $APP_NAME" || echo "No changes to commit"
+          git push origin main

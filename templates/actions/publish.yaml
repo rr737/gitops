@@ -1,0 +1,86 @@
+name: Publish image and helm chart to ECR
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      main
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: {region}
+  # update role ARN
+  ASSUME_ROLE_ARN: {roleARN}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # outputs:
+    #   registry: ${{ steps.login-ecr.outputs.registry }}
+    #   chart_version: ${{ steps.publish-chart.outputs.chart_version }}
+    #   repo_name: ${{ steps.extract-repo-name.outputs.repo_name }}
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract and print just the repository name
+        id: extract-repo-name
+        run: echo "repo_name=${GITHUB_REPOSITORY#*/}" >> $GITHUB_OUTPUT
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: get-helm
+        run: |
+          wget https://get.helm.sh/helm-v3.16.2-linux-amd64.tar.gz
+          tar xvf helm-v3.16.2-linux-amd64.tar.gz
+
+          alias helm="$(pwd)/linux-amd64/helm"
+
+      - name: configure aws credentials
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502
+        with:
+          role-to-assume: ${{ env.ASSUME_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image to Amazon ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ steps.extract-repo-name.outputs.repo_name }}
+          IMAGE_TAG: ${{ github.sha }}
+          REPO_OWNER: ${{ github.repository_owner }}
+        run: |
+          SHORT_SHA=$(echo "$IMAGE_TAG" | cut -c1-7)
+          docker build -t $ECR_REGISTRY/$REPO_OWNER/$ECR_REPOSITORY:$SHORT_SHA .
+          docker push $ECR_REGISTRY/$REPO_OWNER/$ECR_REPOSITORY:$SHORT_SHA
+
+      - name: push-chart-to-ecr
+        id: publish-chart
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+          REPO_OWNER: ${{ github.repository_owner }}
+        run: |
+          cd charts/{appName}
+          SHORT_SHA=$(echo "$IMAGE_TAG" | cut -c1-7)
+          
+          sed -i "s/\(.*version:.*\)/\1-rc.$SHORT_SHA/" Chart.yaml
+          helm package .
+
+          CHART_NAME=$(cat Chart.yaml | grep "^name" | cut -f 2 -d " ")
+          CHART_VERSION=$(cat Chart.yaml | grep "^version" | cut -f 2 -d " ")
+          CHART_ARCHIVE_FILE="$CHART_NAME"-"$CHART_VERSION".tgz
+
+          helm push "$CHART_ARCHIVE_FILE" "oci://$ECR_REGISTRY/$REPO_OWNER/charts"
+
+          echo "chart_version=$CHART_VERSION" >> $GITHUB_OUTPUT
