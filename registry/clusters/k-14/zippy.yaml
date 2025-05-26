@@ -10,16 +10,16 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: '10'
 spec:
-  project: default.
+  project: default
   source:
-  repoURL: oci://555935582951.dkr.ecr.us-west-2.amazonaws.com/rr737/charts
-  chart: zippy
-  targetRevision: 0.1.0-rc.9191e86
-  helm:
-    valuesObject:
-      rr737-zippy:
-        image:
-          repository: 555935582951.dkr.ecr.us-west-2.amazonaws.com/rr737-zippy
+    repoURL: oci://555935582951.dkr.ecr.us-west-2.amazonaws.com/rr737/charts
+    chart: zippy
+    targetRevision: 0.1.0-rc.9191e86
+    helm:
+      valuesObject:
+        rr737-zippy:
+          image:
+            repository: 555935582951.dkr.ecr.us-west-2.amazonaws.com/rr737-zippy
           ingress:
             className: nginx
             enabled: true
