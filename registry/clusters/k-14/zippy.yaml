@@ -19,7 +19,7 @@ spec:
       valuesObject:
         rr737-zippy:
           image:
-            repository: 555935582951.dkr.ecr.us-west-2.amazonaws.com/rr737-zippy
+            repository: 555935582951.dkr.ecr.us-west-2.amazonaws.com/rr737/zippy
           ingress:
             className: nginx
             enabled: true
