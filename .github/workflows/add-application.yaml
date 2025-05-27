@@ -5,7 +5,7 @@
 name: Add new application
 
 env:
-  AWS_REGION: "us-west-2"
+  AWS_REGION: "{{ .Region }}"
 
 on:
   workflow_dispatch:
@@ -29,15 +29,15 @@ jobs:
       id-token: write
       contents: write
     env:
-      CLUSTER_NAME : ${{inputs.cluster_name}}
-      APP_NAME : ${{inputs.app_name}}
-      ASSUME_ROLE_ARN: ${{inputs.role_arn}}
+      CLUSTER_NAME : {{`${{inputs.cluster_name}}`}}
+      APP_NAME : {{`${{inputs.app_name}}`}}
+      ASSUME_ROLE_ARN: {{`${{inputs.role_arn}}`}}
     steps:
       - name: configure aws credentials
         uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502
         with:
-          role-to-assume: ${{env.ASSUME_ROLE_ARN}}
-          aws-region: ${{env.AWS_REGION}}
+          role-to-assume: {{`${{env.ASSUME_ROLE_ARN}}`}}
+          aws-region: {{`${{env.AWS_REGION}}`}}
 
       - name: Login to Amazon ECR
         id: login-ecr
@@ -56,7 +56,7 @@ jobs:
 
       - name: create argo app
         env:
-          ECR_IMAGE_REPO_URL: ${{ steps.login-ecr.outputs.registry }}
+          ECR_IMAGE_REPO_URL: ${{"steps.login-ecr.outputs.registry"}}
         run: |
           APP=$(echo -n $APP_NAME | cut -f 2 -d /)
           OWNER=$(echo -n $APP_NAME | cut -f 1 -d /)
@@ -73,7 +73,7 @@ jobs:
 
           cp ./templates/argo-app.yaml ./registry/clusters/${CLUSTER_NAME}/${APP}.yaml
 
-          ESCAPED_CHART_REGISTRY_URL=$(echo $ECR_IMAGE_REPO_URL/$APP_NAME/charts | sed 's/\//\\\//g')
+          ESCAPED_CHART_REGISTRY_URL=$(echo $ECR_IMAGE_REPO_URL/$OWNER/charts | sed 's/\//\\\//g')
           ESCAPED_IMAGE_REGISTRY_URL=$(echo $ECR_IMAGE_REPO_URL | sed 's/\//\\\//g')
 
           sed -i "s#{clusterName}#$CLUSTER_NAME#g" ./registry/clusters/${CLUSTER_NAME}/${APP}.yaml
