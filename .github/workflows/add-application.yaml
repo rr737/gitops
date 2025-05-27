@@ -73,7 +73,7 @@ jobs:
 
           cp ./templates/argo-app.yaml ./registry/clusters/${CLUSTER_NAME}/${APP}.yaml
 
-          ESCAPED_CHART_REGISTRY_URL=$(echo $ECR_IMAGE_REPO_URL/charts/$APP_NAME | sed 's/\//\\\//g')
+          ESCAPED_CHART_REGISTRY_URL=$(echo $ECR_IMAGE_REPO_URL/$APP_NAME/charts | sed 's/\//\\\//g')
           ESCAPED_IMAGE_REGISTRY_URL=$(echo $ECR_IMAGE_REPO_URL | sed 's/\//\\\//g')
 
           sed -i "s#{clusterName}#$CLUSTER_NAME#g" ./registry/clusters/${CLUSTER_NAME}/${APP}.yaml
